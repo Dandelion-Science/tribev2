@@ -5,8 +5,9 @@
 # LICENSE file in the root directory of this source tree.
 
 from tribev2.pretrained import load_brain_mapper
+from tribev2.video import VideoFeatures, zero_fill
 
-__all__ = ["TribeModel", "load_brain_mapper"]
+__all__ = ["TribeModel", "VideoFeatures", "load_brain_mapper", "zero_fill"]
 
 
 def __getattr__(name):
