@@ -4,7 +4,9 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-__all__ = ["TribeModel"]
+from tribev2.pretrained import load_brain_mapper
+
+__all__ = ["TribeModel", "load_brain_mapper"]
 
 
 def __getattr__(name):
