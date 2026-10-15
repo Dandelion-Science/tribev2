@@ -79,3 +79,15 @@ profile = "black"
 
 [tool.setuptools.packages.find]
 include = ["tribe*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-m", "not slow"]
+markers = [
+  "slow: downloads released weights (~5 GB); run with -m slow",
+]
+filterwarnings = [
+  "error",
+  # x_transformers==1.27.20 (pinned: checkpoints validated against it)
+  "ignore:`torch.cuda.amp.autocast:FutureWarning",
+]
