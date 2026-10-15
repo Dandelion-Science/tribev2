@@ -14,6 +14,37 @@
 
 TRIBE v2 is a deep multimodal brain encoding model that predicts fMRI brain responses to naturalistic stimuli (video, audio, text). It combines state-of-the-art text, audio and video models into a unified Transformer architecture that maps multimodal representations onto the cortical surface.
 
+## Dandelion fork
+
+This fork adds differentiable inference on a current stack without the original event
+pipeline. It is tested on Python 3.14 / torch 2.13 / transformers 5.19 / neuraltrain 0.4 and
+on the release stack (Python 3.12 / torch 2.6 / transformers 4.57 / neuraltrain 0.0.2).
+Dandelion changes live on the `dandelion-v1` branch; `main` tracks upstream. All changes
+are listed in [CHANGELOG.md](CHANGELOG.md).
+
+```python
+import torch
+from tribev2 import VideoFeatures, load_brain_mapper, zero_fill
+
+# The brain mapper (upstream FmriEncoderModel) maps V-JEPA 2 features to fMRI.
+brain_mapper = load_brain_mapper("subcortical")  # or "cortical"; frozen, eval mode
+features = VideoFeatures(fps=16.0)           # V-JEPA 2 giant; mode="sliding" | "static"
+video = torch.rand(1, 32, 3, 480, 640)       # (B, T, 3, H, W) RGB in [0, 1]
+feats = features(video)                      # (B, 2, 1408, 2 Hz samples)
+bold = brain_mapper({"video": zero_fill(feats)})  # (B, n_outputs, 100), 1 Hz
+# Without zero_fill: brain_mapper({"video": feats}, pool_outputs=False) -> 2 Hz, (B, n_outputs, T)
+```
+
+Or via `torch.hub`:
+`torch.hub.load("Dandelion-Science/tribev2:dandelion-v1", "tribev2_brain_mapper", head="subcortical")`.
+
+Tests: `pytest` (fast), `pytest -m slow` (golden comparisons with the release; downloads
+~5 GB, or set `TRIBEV2_CHECKPOINT_ROOT`). Regenerate goldens with `tests/data/make_golden.py`.
+
+The original pipeline below (`TribeModel`, plotting, training) needs the `demo` extra
+(included by `plotting` and `training`), which keeps the release's pins (torch<2.7,
+neuralset 0.0.2) and therefore Python 3.11–3.13.
+
 ## Quick start
 
 Load a pretrained model from HuggingFace and predict brain responses to a video:
@@ -37,9 +68,14 @@ For a full walkthrough with brain visualizations, see the [Colab demo notebook](
 
 ## Installation
 
-**Basic** (inference only):
+**Basic** (`load_brain_mapper`, `VideoFeatures`):
 ```bash
 pip install -e .
+```
+
+**Original release pipeline** (`TribeModel`, as in the quick start):
+```bash
+pip install -e ".[demo]"
 ```
 
 **With brain visualization**:
