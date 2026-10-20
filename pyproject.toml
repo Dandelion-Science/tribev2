@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tribev2"
-version = "0.1.0+dandelion.1"
+version = "0.1.0+dandelion.2"
 description = "Deep multimodal brain encoding"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,7 +17,7 @@ dependencies = [
   "torch>=2.5.1",
   "torchvision>=0.20",
   "neuraltrain>=0.0.2",
-  "x_transformers==1.27.20",  # checkpoints validated against this version
+  "x_transformers>=2.31",  # see tribev2.pretrained.convert_released_encoder
   "einops",
   "pyyaml",
   "huggingface_hub",
@@ -88,6 +88,6 @@ markers = [
 ]
 filterwarnings = [
   "error",
-  # x_transformers==1.27.20 (pinned: checkpoints validated against it)
-  "ignore:`torch.cuda.amp.autocast:FutureWarning",
+  # x_transformers.attend uses torch.jit.script
+  "ignore:`torch.jit.script` is not supported:FutureWarning",
 ]

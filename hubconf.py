@@ -3,7 +3,7 @@
 
 """Entry points for ``torch.hub``.
 
-Example: ``torch.hub.load("Dandelion-Science/tribev2:dandelion-v1",
+Example: ``torch.hub.load("Dandelion-Science/tribev2:dandelion-v2",
 "tribev2_brain_mapper", head="subcortical")``.
 """
 

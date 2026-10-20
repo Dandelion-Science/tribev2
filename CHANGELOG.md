@@ -6,6 +6,32 @@ non-commercial research. As the CC BY-NC 4.0 licence requires, every change to t
 original work is listed here. Dandelion changes live on `dandelion-v*` branches cut
 from upstream; `main` tracks upstream. Upstream base: `af58661`.
 
+## 0.1.0+dandelion.2 (2026-10-20, branch `dandelion-v2`)
+
+Requires x_transformers>=2.31 instead of pinning 1.27.20, tested on the same
+current and release stacks as `dandelion-v1`. Golden outputs are unchanged.
+
+### Added
+
+- `tribev2.pretrained.convert_released_encoder(model)` makes a released checkpoint
+  loaded on x_transformers>=2.31 match its release, which was trained on 1.27.20.
+  Two later x_transformers defaults load under the same parameter names but change
+  the outputs: 1.30.1 rotates interleaved rotary pairs, undone by permuting the
+  query and key projection rows, and 1.31.3 adds 1 to the norm gains
+  (`norm_add_unit_offset`), undone by turning the offset off. Without it, outputs
+  differ from the goldens by up to 1.6.
+
+### Changed
+
+- `load_brain_mapper` and `TribeModel.from_pretrained` call
+  `convert_released_encoder` after loading the weights.
+- Dependencies: `x_transformers>=2.31` replaces `x_transformers==1.27.20`.
+
+### Notes
+
+- Fine-tuning from a released checkpoint (`TribeExperiment`, `main.py`) does not
+  convert the weights.
+
 ## 0.1.0+dandelion.1 (2026-10-14, branch `dandelion-v1`)
 
 Inference on a current stack, tested on Python 3.14, torch 2.13, transformers 5.19

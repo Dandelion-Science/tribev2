@@ -38,6 +38,7 @@ from neuralset.events.utils import standardize_events
 
 from tribev2.eventstransforms import ExtractWordsFromAudio
 from tribev2.main import TribeExperiment
+from tribev2.pretrained import convert_released_encoder
 
 VALID_SUFFIXES: dict[str, set[str]] = {
     "text_path": {".txt"},
@@ -234,6 +235,7 @@ class TribeModel(TribeExperiment):
 
         model = xp.brain_model_config.build(**build_args)
         model.load_state_dict(state_dict, strict=True, assign=True)
+        convert_released_encoder(model)
         del state_dict
         model.to(device)
         model.eval()

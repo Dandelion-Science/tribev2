@@ -103,4 +103,43 @@ def load_brain_mapper(
     }
     model = FmriEncoder(**model_config).build(**build_args)
     model.load_state_dict(state_dict, strict=True, assign=True)
+    convert_released_encoder(model)
     return model.requires_grad_(False).eval().to(device)
+
+
+def convert_released_encoder(model: FmriEncoderModel) -> None:
+    """Make a released checkpoint, loaded on x_transformers>=2.31, match its release.
+
+    The checkpoints were trained on x_transformers 1.27.20. Two later defaults load
+    under the same parameter names but change the outputs:
+
+    - 1.30.1 rotates rotary pairs ``(2i, 2i+1)`` instead of ``(i, i + rot_dim/2)``.
+      Permuting the query and key projection rows the same way restores the
+      release's attention scores, since ``q @ k`` is unchanged.
+    - 1.31.3 adds 1 to every norm gain (``norm_add_unit_offset=True``); the
+      checkpoints store the gains without that offset.
+
+    Call it once, in place, right after loading released weights.
+    """
+    from x_transformers.x_transformers import Attention
+
+    encoder = model.encoder
+    for module in encoder.modules():
+        if getattr(module, "unit_offset", False):
+            module.unit_offset = False
+    if encoder.rotary_pos_emb is None:
+        return
+    rot_dim = 2 * encoder.rotary_pos_emb.inv_freq.numel()
+    half = torch.arange(rot_dim // 2)
+    for attn in encoder.modules():
+        if not isinstance(attn, Attention):
+            continue
+        dim_head = attn.to_q.weight.shape[0] // attn.heads
+        perm = torch.arange(dim_head)
+        perm[:rot_dim] = torch.stack([half, half + rot_dim // 2], dim=-1).flatten()
+        for proj in (attn.to_q, attn.to_k):
+            heads = proj.weight.shape[0] // dim_head
+            rows = (torch.arange(heads)[:, None] * dim_head + perm).flatten()
+            proj.weight = torch.nn.Parameter(
+                proj.weight[rows], requires_grad=proj.weight.requires_grad
+            )
