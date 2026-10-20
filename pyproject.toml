@@ -4,33 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tribev2"
-version = "0.1.0"
+version = "0.1.0+dandelion.1"
 description = "Deep multimodal brain encoding"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
 authors = [{name = "Meta Platforms, Inc."}]
 
+# Core: released brain mappers and differentiable video features
+# (tribev2.load_brain_mapper, tribev2.VideoFeatures).
 dependencies = [
-  "neuralset==0.0.2",
-  "neuraltrain==0.0.2",
-  "exca==0.5.20",
-  "torch>=2.5.1,<2.7",
-  "numpy==2.2.6",
-  "torchvision>=0.20,<0.22",
-  "x_transformers==1.27.20",
+  "torch>=2.5.1",
+  "torchvision>=0.20",
+  "neuraltrain>=0.0.2",
+  "x_transformers==1.27.20",  # checkpoints validated against this version
   "einops",
   "pyyaml",
-  "moviepy>=2.2.1",
   "huggingface_hub",
-  "gtts",
-  "langdetect",
-  "spacy",
-  "soundfile",
-  "pip",
-  "Levenshtein",
-  "julius",
-  "transformers"
+  "transformers>=4.53",  # VJEPA2Model
 ]
 
 [project.urls]
@@ -38,7 +29,28 @@ Homepage = "https://github.com/facebookresearch/tribev2"
 Repository = "https://github.com/facebookresearch/tribev2"
 
 [project.optional-dependencies]
+  # Original release pipeline (TribeModel, events, training). Pinned to the
+  # environment it was released with; it fails on neuralset 0.2.3 and 0.4.0.
+  demo = [
+    "neuralset==0.0.2",
+    "neuraltrain==0.0.2",
+    "exca==0.5.20",
+    "torch>=2.5.1,<2.7",
+    "numpy==2.2.6",
+    "torchvision>=0.20,<0.22",
+    "transformers<5",
+    "moviepy>=2.2.1",
+    "gtts",
+    "langdetect",
+    "spacy",
+    "soundfile",
+    "pip",
+    "Levenshtein",
+    "julius",
+  ]
+  # plotting and training import tribev2.utils, which needs the neuralset 0.0.2 API.
   plotting = [
+    "tribev2[demo]",
     "nibabel",
     "matplotlib",
     "seaborn",
@@ -49,6 +61,7 @@ Repository = "https://github.com/facebookresearch/tribev2"
     "scikit-image",
   ]
   training = [
+    "tribev2[demo]",
     "nibabel",
     "torchmetrics",
     "wandb",
@@ -66,3 +79,15 @@ profile = "black"
 
 [tool.setuptools.packages.find]
 include = ["tribe*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-m", "not slow"]
+markers = [
+  "slow: downloads released weights (~5 GB); run with -m slow",
+]
+filterwarnings = [
+  "error",
+  # x_transformers==1.27.20 (pinned: checkpoints validated against it)
+  "ignore:`torch.cuda.amp.autocast:FutureWarning",
+]

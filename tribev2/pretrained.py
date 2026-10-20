@@ -1,0 +1,106 @@
+# Copyright (c) Dandelion Science. Adapted from facebookresearch/tribev2,
+# licensed under CC BY-NC 4.0 (see LICENSE in the root directory of this tree).
+
+"""Load released brain mappers without the neuralset/exca experiment stack.
+
+TRIBE v2's brain mapper (upstream ``FmriEncoderModel``, which upstream calls the
+"brain model") maps 2 Hz V-JEPA 2 video features, and text and audio features
+unused here, to fMRI responses: a transformer over the projected features followed
+by a linear average-subject head. It is the mapper of an encoding pipeline whose
+backbone is :class:`tribev2.VideoFeatures`.
+"""
+
+from pathlib import Path
+
+import torch
+import yaml
+
+from tribev2.model import FmriEncoder, FmriEncoderModel
+
+# HuggingFace repo and the revision the tests' golden outputs were made from.
+HEADS = {
+    "cortical": ("facebook/tribev2", "f894e783020944dcd96e5568550afe2aa9743f9f"),
+    "subcortical": (
+        "facebook/tribev2-subcortical",
+        "214a5d939573b09772fdb47415585201e94e2e15",
+    ),
+}
+
+# Released feature dims (layer groups, dim) for text, audio and video. The
+# subcortical checkpoint does not record them in ``model_build_args``.
+FEATURE_DIMS = {"text": (2, 3072), "audio": (2, 1024), "video": (2, 1408)}
+
+
+class _ConfigLoader(yaml.SafeLoader):
+    """Read the released config's ``!!python/...`` tags (paths, tuples) as ``None``.
+
+    None occur in the sections read here, and upstream's ``UnsafeLoader`` would
+    execute arbitrary constructors from a downloaded file.
+    """
+
+
+_ConfigLoader.add_multi_constructor(
+    "tag:yaml.org,2002:python/", lambda loader, suffix, node: None
+)
+
+
+def load_brain_mapper(
+    head: str = "cortical",
+    *,
+    checkpoint_name: str = "best.ckpt",
+    device: str | torch.device = "cpu",
+) -> FmriEncoderModel:
+    """Load a released TRIBE v2 brain mapper in average-subject mode.
+
+    Builds the model from the released ``config.yaml`` and checkpoint only,
+    exactly as ``TribeModel.from_pretrained`` does with ``average_subjects=True``.
+    The model is returned frozen and in eval mode: the released config sets
+    ``modality_dropout=0.3``, so outputs are wrong in train mode.
+
+    Parameters
+    ----------
+    head : str
+        ``"cortical"`` (fsaverage5, 20484 vertices) or ``"subcortical"`` (8808
+        voxels), downloaded at a pinned revision; or a HuggingFace Hub repo id
+        or a local directory containing ``config.yaml`` and the checkpoint.
+    checkpoint_name : str
+        Checkpoint filename inside the directory or repo.
+    device : str | torch.device
+        Device to place the model on.
+
+    Returns
+    -------
+    brain_mapper : FmriEncoderModel
+        Call it with ``{"video": (B, 2, 1408, T)}`` 2 Hz features, ``T <= 1024``;
+        missing modalities are zero-filled. The output ``(B, n_outputs, 100)``
+        is ``AdaptiveAvgPool1d(100)`` over ``T``, so it is 1 Hz only for
+        ``T = 200`` (a 100 s context, as from :func:`tribev2.zero_fill`). For any
+        other ``T`` pass ``pool_outputs=False`` to get ``(B, n_outputs, T)`` at
+        2 Hz.
+    """
+    if Path(head).is_dir():
+        config_path = Path(head) / "config.yaml"
+        ckpt_path = Path(head) / checkpoint_name
+    else:
+        from huggingface_hub import hf_hub_download
+
+        repo_id, revision = HEADS.get(head, (head, None))
+        config_path = hf_hub_download(repo_id, "config.yaml", revision=revision)
+        ckpt_path = hf_hub_download(repo_id, checkpoint_name, revision=revision)
+
+    with open(config_path) as f:
+        config = yaml.load(f, Loader=_ConfigLoader)
+    model_config = config["brain_model_config"]
+    model_config.pop("name")
+    model_config["subject_layers"].update(average_subjects=True, n_subjects=0)
+
+    ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True, mmap=True)
+    state_dict = {k.removeprefix("model."): v for k, v in ckpt["state_dict"].items()}
+    build_args = ckpt.get("model_build_args") or {
+        "feature_dims": FEATURE_DIMS,
+        "n_outputs": state_dict["predictor.bias"].shape[-1],
+        "n_output_timesteps": config["data"]["duration_trs"],
+    }
+    model = FmriEncoder(**model_config).build(**build_args)
+    model.load_state_dict(state_dict, strict=True, assign=True)
+    return model.requires_grad_(False).eval().to(device)

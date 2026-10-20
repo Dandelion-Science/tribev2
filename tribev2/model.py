@@ -6,14 +6,18 @@
 
 import logging
 import typing as tp
+from collections.abc import Mapping
+from types import SimpleNamespace
 
 import torch
 from einops import rearrange
-from neuralset.dataloader import SegmentData
 from neuraltrain.models.base import BaseModelConfig
 from neuraltrain.models.common import Mlp, SubjectLayers, SubjectLayersModel
 from neuraltrain.models.transformer import TransformerEncoder
 from torch import nn
+
+if tp.TYPE_CHECKING:
+    from neuralset.dataloader import SegmentData
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +164,18 @@ class FmriEncoderModel(nn.Module):
     def device(self) -> torch.device:
         return next(self.parameters()).device
 
-    def forward(self, batch: SegmentData, pool_outputs: bool = True) -> torch.Tensor:
+    def forward(
+        self,
+        batch: "SegmentData | Mapping[str, torch.Tensor]",
+        pool_outputs: bool = True,
+    ) -> torch.Tensor:
+        if isinstance(batch, Mapping):  # plain {modality: tensor} dict
+            if not set(batch) & set(self.feature_dims):
+                raise ValueError(
+                    f"no known modality in {sorted(batch)}, "
+                    f"expected some of {sorted(self.feature_dims)}"
+                )
+            batch = SimpleNamespace(data=batch)
         x = self.aggregate_features(batch)  # B, T, H
         subject_id = batch.data.get("subject_id", None)
         if hasattr(self, "temporal_smoothing"):
