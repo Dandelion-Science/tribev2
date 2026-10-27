@@ -29,6 +29,8 @@ HEADS = {
 # Released feature dims (layer groups, dim) for text, audio and video. The
 # subcortical checkpoint does not record them in ``model_build_args``.
 FEATURE_DIMS = {"text": (2, 3072), "audio": (2, 1024), "video": (2, 1408)}
+# Output size of each released head, to build one without its checkpoint.
+N_OUTPUTS = {"cortical": 20484, "subcortical": 8808}
 
 
 class _ConfigLoader(yaml.SafeLoader):
@@ -49,6 +51,7 @@ def load_brain_mapper(
     *,
     checkpoint_name: str = "best.ckpt",
     device: str | torch.device = "cpu",
+    pretrained: bool = True,
 ) -> FmriEncoderModel:
     """Load a released TRIBE v2 brain mapper in average-subject mode.
 
@@ -67,6 +70,10 @@ def load_brain_mapper(
         Checkpoint filename inside the directory or repo.
     device : str | torch.device
         Device to place the model on.
+    pretrained : bool
+        If ``False``, build a released head (``"cortical"`` or ``"subcortical"``)
+        from its ``config.yaml`` alone, randomly initialized, for callers that
+        load their own weights next; the checkpoint is not downloaded.
 
     Returns
     -------
@@ -78,6 +85,11 @@ def load_brain_mapper(
         other ``T`` pass ``pool_outputs=False`` to get ``(B, n_outputs, T)`` at
         2 Hz.
     """
+    if not pretrained and head not in N_OUTPUTS:
+        raise ValueError(
+            "pretrained=False builds a released head ('cortical' or "
+            f"'subcortical'), got {head!r}"
+        )
     if Path(head).is_dir():
         config_path = Path(head) / "config.yaml"
         ckpt_path = Path(head) / checkpoint_name
@@ -86,22 +98,31 @@ def load_brain_mapper(
 
         repo_id, revision = HEADS.get(head, (head, None))
         config_path = hf_hub_download(repo_id, "config.yaml", revision=revision)
-        ckpt_path = hf_hub_download(repo_id, checkpoint_name, revision=revision)
+        if pretrained:
+            ckpt_path = hf_hub_download(repo_id, checkpoint_name, revision=revision)
 
     with open(config_path) as f:
         config = yaml.load(f, Loader=_ConfigLoader)
     model_config = config["brain_model_config"]
     model_config.pop("name")
     model_config["subject_layers"].update(average_subjects=True, n_subjects=0)
+    build_args = {
+        "feature_dims": FEATURE_DIMS,
+        "n_outputs": N_OUTPUTS.get(head),
+        "n_output_timesteps": config["data"]["duration_trs"],
+    }
+    if not pretrained:
+        model = FmriEncoder(**model_config).build(**build_args)
+        # Sets the release's x_transformers options; the weights are random anyway.
+        convert_released_encoder(model)
+        return model.requires_grad_(False).eval().to(device)
 
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True, mmap=True)
     state_dict = {k.removeprefix("model."): v for k, v in ckpt["state_dict"].items()}
-    build_args = ckpt.get("model_build_args") or {
-        "feature_dims": FEATURE_DIMS,
-        "n_outputs": state_dict["predictor.bias"].shape[-1],
-        "n_output_timesteps": config["data"]["duration_trs"],
-    }
-    model = FmriEncoder(**model_config).build(**build_args)
+    build_args["n_outputs"] = state_dict["predictor.bias"].shape[-1]
+    model = FmriEncoder(**model_config).build(
+        **(ckpt.get("model_build_args") or build_args)
+    )
     model.load_state_dict(state_dict, strict=True, assign=True)
     convert_released_encoder(model)
     return model.requires_grad_(False).eval().to(device)

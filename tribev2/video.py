@@ -45,6 +45,10 @@ class VideoFeatures(nn.Module):
     dtype : torch.dtype
         V-JEPA 2 compute dtype. The release used float32; bfloat16 is faster
         and uses less memory, at a small numerical cost.
+    pretrained : bool
+        If ``False``, build V-JEPA 2 from its config alone, randomly initialized,
+        for callers that load their own weights next; only the config is
+        downloaded.
     """
 
     def __init__(
@@ -54,9 +58,10 @@ class VideoFeatures(nn.Module):
         mode: tp.Literal["sliding", "static"] = "sliding",
         model_name: str = "facebook/vjepa2-vitg-fpc64-256",
         dtype: torch.dtype = torch.float32,
+        pretrained: bool = True,
     ) -> None:
         super().__init__()
-        from transformers import VJEPA2Model
+        from transformers import VJEPA2Config, VJEPA2Model
 
         if fps <= 0:
             raise ValueError(f"fps must be positive, got {fps}")
@@ -64,7 +69,11 @@ class VideoFeatures(nn.Module):
             raise ValueError(f"mode must be 'sliding' or 'static', got {mode!r}")
         self.fps = fps
         self.mode = mode
-        self.model = VJEPA2Model.from_pretrained(model_name, torch_dtype=dtype)
+        if pretrained:
+            self.model = VJEPA2Model.from_pretrained(model_name, torch_dtype=dtype)
+        else:
+            config = VJEPA2Config.from_pretrained(model_name)
+            self.model = VJEPA2Model(config).to(dtype)
         self.model.requires_grad_(False).eval()
         self.register_buffer(
             "mean", torch.tensor(MEAN)[:, None, None], persistent=False

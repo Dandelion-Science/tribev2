@@ -19,7 +19,7 @@ TRIBE v2 is a deep multimodal brain encoding model that predicts fMRI brain resp
 This fork adds differentiable inference on a current stack without the original event
 pipeline. It is tested on Python 3.14 / torch 2.13 / transformers 5.19 / neuraltrain 0.4 and
 on the release stack (Python 3.12 / torch 2.6 / transformers 4.57 / neuraltrain 0.0.2).
-Dandelion changes live on `dandelion-v*` branches (latest: `dandelion-v2`); `main`
+Dandelion changes live on `dandelion-v*` branches (latest: `dandelion-v3`); `main`
 tracks upstream. All changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ```python
@@ -36,7 +36,7 @@ bold = brain_mapper({"video": zero_fill(feats)})  # (B, n_outputs, 100), 1 Hz
 ```
 
 Or via `torch.hub`:
-`torch.hub.load("Dandelion-Science/tribev2:dandelion-v2", "tribev2_brain_mapper", head="subcortical")`.
+`torch.hub.load("Dandelion-Science/tribev2:dandelion-v3", "tribev2_brain_mapper", head="subcortical")`.
 
 Tests: `pytest` (fast), `pytest -m slow` (golden comparisons with the release; downloads
 ~5 GB, or set `TRIBEV2_CHECKPOINT_ROOT`). Regenerate goldens with `tests/data/make_golden.py`.

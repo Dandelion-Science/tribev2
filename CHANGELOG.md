@@ -6,6 +6,23 @@ non-commercial research. As the CC BY-NC 4.0 licence requires, every change to t
 original work is listed here. Dandelion changes live on `dandelion-v*` branches cut
 from upstream; `main` tracks upstream. Upstream base: `af58661`.
 
+## 0.1.0+dandelion.3 (2026-10-27, branch `dandelion-v3`)
+
+Builds the models without downloading their released weights, for callers that load
+their own weights next, such as fine-tuned models stored elsewhere. Tested on the
+current stack (Python 3.14, torch 2.13, transformers 5.20); golden outputs are
+unchanged.
+
+### Added
+
+- `VideoFeatures(..., pretrained=False)` builds V-JEPA 2 from its config alone,
+  randomly initialized; only `config.json` is downloaded instead of the ~4 GB
+  checkpoint.
+- `load_brain_mapper(head, pretrained=False)` builds a released head
+  (`"cortical"` or `"subcortical"`) from its `config.yaml` alone, with the
+  release's x_transformers options set, and does not download the checkpoint.
+  Given the released weights, it reproduces the goldens.
+
 ## 0.1.0+dandelion.2 (2026-10-20, branch `dandelion-v2`)
 
 Requires x_transformers>=2.31 instead of pinning 1.27.20, tested on the same

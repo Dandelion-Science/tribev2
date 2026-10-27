@@ -105,9 +105,19 @@ def test_video_features_modes_and_gradients(tiny_video_features):
         tiny_video_features(fps=16.0)(video.detach().mul(255).byte())
 
 
+def test_video_features_without_pretrained_weights(tiny_video_features):
+    video = torch.rand(1, 16, 3, 64, 64)
+    released = tiny_video_features(fps=16.0)
+    built = tiny_video_features(fps=16.0, pretrained=False)
+    assert not torch.equal(built(video), released(video))
+    built.load_state_dict(released.state_dict())
+    torch.testing.assert_close(built(video), released(video), rtol=0, atol=0)
+
+
 @pytest.mark.slow
+@pytest.mark.parametrize("pretrained", [True, False])
 @pytest.mark.parametrize("head", ["cortical", "subcortical"])
-def test_released_heads_match_upstream(head):
+def test_released_heads_match_upstream(head, pretrained):
     # Goldens: every 64th output of unmodified upstream af58661 (see
     # data/make_golden.py). Cortical uses TribeModel.from_pretrained. The
     # subcortical golden is built by the same recipe as load_brain_mapper (which
@@ -115,6 +125,11 @@ def test_released_heads_match_upstream(head):
     model = load_brain_mapper(
         f"{CHECKPOINT_ROOT}/tribev2-{head}" if CHECKPOINT_ROOT else head
     )
+    if not pretrained:
+        # Built from config.yaml alone, then given the released weights.
+        weights = model.state_dict()
+        model = load_brain_mapper(head, pretrained=False)
+        model.load_state_dict(weights)
     assert not model.training
     x = torch.sin(torch.arange(2 * 1408 * 200, dtype=torch.float32) * 0.37)
     with torch.no_grad():
